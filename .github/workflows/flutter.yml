@@ -1,4 +1,5 @@
 name: Flutter Build & Firebase Distribution
+
 on:
   push:
     branches: [ main ]
@@ -6,38 +7,65 @@ on:
     branches: [ main ]
 
 jobs:
-  build:
+  build-and-distribute:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - uses: subosito/flutter-action@v2
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.22.0'
+          cache: true
+          cache-key: flutter-${{ runner.os }}-${{ hashFiles('**/pubspec.lock') }}
 
-      - run: flutter pub get
+      - name: Install dependencies
+        run: flutter pub get
 
-      - run: flutter build apk --release
+      - name: Verify Flutter installation
+        run: flutter doctor
 
-      - uses: actions/upload-artifact@v4
+      - name: Build APK
+        run: flutter build apk --release
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: app-release
+          name: app-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 7
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: '18'
+          cache: 'npm'
 
-      - run: npm install -g firebase-tools
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
 
       - name: Deploy to Firebase App Distribution
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
+          # Create service account key file
           echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/key.json
+          
+          # Verify the file was created
+          echo "Service account file created:"
+          ls -la /tmp/key.json
+          
+          # Deploy to Firebase App Distribution
           firebase appdistribution:distribute \
             build/app/outputs/flutter-apk/app-release.apk \
-            --app ${{ secrets.FIREBASE_APP_ID }} \
+            --app "1:785542072257:android:55359829ed8c34289f5140" \
             --groups "testers" \
-            --token "$(gcloud auth print-access-token --impersonate-service-account=$(cat /tmp/key.json | jq -r .client_email))" \
-            --release-notes "Build #${{ github.run_number }}"
+            --service-account-file /tmp/key.json \
+            --release-notes "Automated build #${{ github.run_number }} from GitHub Actions" \
+            --verbose
+          
+          # Clean up sensitive file
+          rm -f /tmp/key.json
+          echo "Deployment completed successfully!"
