@@ -41,7 +41,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
+          # Remove the cache line since this is a Flutter project
 
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
@@ -56,6 +56,10 @@ jobs:
           # Verify the file was created
           echo "Service account file created:"
           ls -la /tmp/key.json
+          
+          # Verify the APK exists
+          echo "APK file details:"
+          ls -la build/app/outputs/flutter-apk/app-release.apk
           
           # Deploy to Firebase App Distribution
           firebase appdistribution:distribute \
