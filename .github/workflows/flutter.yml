@@ -55,7 +55,7 @@ jobs:
       - name: Deploy to Firebase App Distribution
         if: github.event_name == 'push'  # optional, skip on PRs
         env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}  # raw JSON
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.SAQIB }}  # raw JSON
           FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
         run: |
           set -euo pipefail
