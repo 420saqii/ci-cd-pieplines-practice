@@ -86,10 +86,21 @@ jobs:
             
             const key = JSON.parse(fs.readFileSync(keyPath, 'utf8'));
             
+            // Fix private key: replace escaped newlines with actual newlines
+            const privateKey = key.private_key.replace(/\\n/g, '\n');
+            
+            // Verify we have required fields
+            if (!key.client_email || !privateKey) {
+              console.error('Error: Missing required fields in service account key');
+              console.error('client_email:', key.client_email ? 'present' : 'missing');
+              console.error('private_key:', privateKey ? 'present' : 'missing');
+              process.exit(1);
+            }
+            
             const jwtClient = new google.auth.JWT(
               key.client_email,
               null,
-              key.private_key,
+              privateKey,
               [
                 'https://www.googleapis.com/auth/firebase',
                 'https://www.googleapis.com/auth/cloud-platform'
