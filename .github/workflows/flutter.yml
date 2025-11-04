@@ -71,6 +71,8 @@ jobs:
 
       # 🚀 Step 11: Distribute APK to Firebase App Distribution
       - name: Distribute APK to Firebase App Distribution
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ env.HOME }}/firebase-service-account.json
         run: |
           firebase appdistribution:distribute \
             build/app/outputs/flutter-apk/app-release.apk \
