@@ -39,12 +39,19 @@ jobs:
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
 
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
       - name: Authenticate with Firebase
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
           echo "$FIREBASE_SERVICE_ACCOUNT" > $HOME/firebase-service-account.json
           export GOOGLE_APPLICATION_CREDENTIALS=$HOME/firebase-service-account.json
+          gcloud auth activate-service-account --key-file=$HOME/firebase-service-account.json
+          # Get access token and authenticate Firebase CLI
+          ACCESS_TOKEN=$(gcloud auth print-access-token)
+          firebase login:ci --token "$ACCESS_TOKEN"
 
       - name: Distribute APK to Firebase App Distribution
         env:
