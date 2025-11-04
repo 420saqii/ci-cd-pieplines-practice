@@ -1,44 +1,72 @@
-# Use Flutter 3.32.0
-- name: Setup Flutter
-  uses: subosito/flutter-action@v2
-  with:
-    flutter-version: '3.32.0'
-    cache: true
-    cache-key: flutter-${{ runner.os }}-${{ hashFiles('**/pubspec.lock') }}
+name: Flutter Build
 
-# Java 17 helps modern AGP
-- name: Setup Java
-  uses: actions/setup-java@v4
-  with:
-    distribution: temurin
-    java-version: '17'
-    cache: gradle
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
-# Node 20 for firebase-tools
-- name: Setup Node.js
-  uses: actions/setup-node@v4
-  with:
-    node-version: '20'
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-- name: Install Firebase CLI
-  run: npm install -g firebase-tools
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-# ✅ Distribute using ADC (no --service-account-file)
-- name: Deploy to Firebase App Distribution
-  if: ${{ github.event_name == 'push' }}  # optional, skip on PRs
-  env:
-    FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}  # raw JSON
-    FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
-  run: |
-    set -euo pipefail
-    printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/key.json"
-    echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/key.json" >> $GITHUB_ENV
+      # Use Flutter 3.32.0
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.32.0'
+          cache: true
+          cache-key: flutter-${{ runner.os }}-${{ hashFiles('**/pubspec.lock') }}
 
-    echo "APK file details:"; ls -la build/app/outputs/flutter-apk/app-release.apk
+      # Java 17 helps modern AGP
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
 
-    firebase appdistribution:distribute \
-      build/app/outputs/flutter-apk/app-release.apk \
-      --app "$FIREBASE_APP_ID" \
-      --groups "testers" \
-      --release-notes "Automated build #${{ github.run_number }}" \
-      --debug
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+      # Node 20 for firebase-tools
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      # ✅ Distribute using ADC (no --service-account-file)
+      - name: Deploy to Firebase App Distribution
+        if: github.event_name == 'push'  # optional, skip on PRs
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}  # raw JSON
+          FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/key.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/key.json" >> $GITHUB_ENV
+
+          echo "APK file details:"; ls -la build/app/outputs/flutter-apk/app-release.apk
+
+          firebase appdistribution:distribute \
+            build/app/outputs/flutter-apk/app-release.apk \
+            --app "$FIREBASE_APP_ID" \
+            --groups "testers" \
+            --release-notes "Automated build #${{ github.run_number }}" \
+            --debug
