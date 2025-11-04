@@ -1,75 +1,44 @@
-name: Flutter Build & Firebase Distribution
+# Use Flutter 3.32.0
+- name: Setup Flutter
+  uses: subosito/flutter-action@v2
+  with:
+    flutter-version: '3.32.0'
+    cache: true
+    cache-key: flutter-${{ runner.os }}-${{ hashFiles('**/pubspec.lock') }}
 
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+# Java 17 helps modern AGP
+- name: Setup Java
+  uses: actions/setup-java@v4
+  with:
+    distribution: temurin
+    java-version: '17'
+    cache: gradle
 
-jobs:
-  build-and-distribute:
-    runs-on: ubuntu-latest
+# Node 20 for firebase-tools
+- name: Setup Node.js
+  uses: actions/setup-node@v4
+  with:
+    node-version: '20'
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+- name: Install Firebase CLI
+  run: npm install -g firebase-tools
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.22.0'
-          cache: true
-          cache-key: flutter-${{ runner.os }}-${{ hashFiles('**/pubspec.lock') }}
+# ✅ Distribute using ADC (no --service-account-file)
+- name: Deploy to Firebase App Distribution
+  if: ${{ github.event_name == 'push' }}  # optional, skip on PRs
+  env:
+    FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}  # raw JSON
+    FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
+  run: |
+    set -euo pipefail
+    printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/key.json"
+    echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/key.json" >> $GITHUB_ENV
 
-      - name: Install dependencies
-        run: flutter pub get
+    echo "APK file details:"; ls -la build/app/outputs/flutter-apk/app-release.apk
 
-      - name: Verify Flutter installation
-        run: flutter doctor
-
-      - name: Build APK
-        run: flutter build apk --release
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
-          retention-days: 7
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          # Remove the cache line since this is a Flutter project
-
-      - name: Install Firebase CLI
-        run: npm install -g firebase-tools
-
-      - name: Deploy to Firebase App Distribution
-        env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-        run: |
-          # Create service account key file
-          echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/key.json
-          
-          # Verify the file was created
-          echo "Service account file created:"
-          ls -la /tmp/key.json
-          
-          # Verify the APK exists
-          echo "APK file details:"
-          ls -la build/app/outputs/flutter-apk/app-release.apk
-          
-          # Deploy to Firebase App Distribution
-          firebase appdistribution:distribute \
-            build/app/outputs/flutter-apk/app-release.apk \
-            --app "1:785542072257:android:55359829ed8c34289f5140" \
-            --groups "testers" \
-            --service-account-file /tmp/key.json \
-            --release-notes "Automated build #${{ github.run_number }} from GitHub Actions" \
-            --verbose
-          
-          # Clean up sensitive file
-          rm -f /tmp/key.json
-          echo "Deployment completed successfully!"
+    firebase appdistribution:distribute \
+      build/app/outputs/flutter-apk/app-release.apk \
+      --app "$FIREBASE_APP_ID" \
+      --groups "testers" \
+      --release-notes "Automated build #${{ github.run_number }}" \
+      --debug
